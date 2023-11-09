@@ -1,41 +1,12 @@
 """
-Copyright (c) 2020, 2021 Russ Hughes
 
-This file incorporates work covered by the following copyright and
-permission notice and is licensed under the same terms:
+This driver support for:
 
-The MIT License (MIT)
-
-Copyright (c) 2019 Ivan Belokobylskiy
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-
-The driver is based on devbis' st7789py_mpy module from
-https://github.com/devbis/st7789py_mpy.
-
-This driver adds support for:
-
-- 320x240, 240x240 and 135x240 pixel displays
+- 320x240, 280x240, 240x240 and 135x240 pixel displays
 - Display rotation
 - Hardware based scrolling
 - Drawing text using 8 and 16 bit wide bitmap fonts with heights that are
-  multiples of 8.  Included are 12 bitmap fonts derived from classic pc
+  multiples of 8. Included are 12 bitmap fonts derived from classic pc
   BIOS text mode fonts.
 - Drawing text using converted TrueType fonts.
 - Drawing converted bitmaps
@@ -44,7 +15,7 @@ This driver adds support for:
 
 import time
 from micropython import const
-import ustruct as struct
+import struct
 
 # commands
 ST7789_NOP = const(0x00)
@@ -102,9 +73,9 @@ MAGENTA = const(0xF81F)
 YELLOW = const(0xFFE0)
 WHITE = const(0xFFFF)
 
-_ENCODE_PIXEL = ">H"
-_ENCODE_POS = ">HH"
-_DECODE_PIXEL = ">BBB"
+_ENCODE_PIXEL = '>H'
+_ENCODE_POS = '>HH'
+_DECODE_PIXEL = '>BBB'
 
 _BUFFER_SIZE = const(256)
 
@@ -123,6 +94,11 @@ WIDTH_320 = [(240, 320,  0,  0),
              (320, 240,  0,  0),
              (240, 320,  0,  0),
              (320, 240,  0,  0)]
+
+WIDTH_280 = [(240, 280,  0, 20),
+             (280, 240, 20,  0),
+             (240, 280,  0, 20),
+             (280, 240, 20,  0)]
 
 WIDTH_240 = [(240, 240,  0,  0),
              (240, 240,  0,  0),
@@ -182,18 +158,18 @@ class ST7789():
         """
         Initialize display.
         """
-        if height != 240 or width not in [320, 240, 135]:
+        if height != 240 or width not in [320, 280, 240, 135]:
             raise ValueError(
-                "Unsupported display. 320x240, 240x240 and 135x240 are supported."
+                'Unsupported display. 320x240, 280x240, 240x240 and 135x240 are supported.'
             )
 
         if dc is None:
-            raise ValueError("dc pin is required.")
+            raise ValueError('dc pin is required.')
 
         self._display_width = self.width = width
         self._display_height = self.height = height
-        self.xstart = 0
-        self.ystart = 0
+        self._xstart = 0
+        self._ystart = 0
         self.spi = spi
         self.reset = reset
         self.dc = dc
@@ -202,7 +178,7 @@ class ST7789():
         self._rotation = rotation % 4
 
         self.hard_reset()
-        self.soft_reset()
+        # self.soft_reset()
         self.sleep_mode(False)
 
         self._set_color_mode(COLOR_MODE_65K | COLOR_MODE_16BIT)
@@ -312,16 +288,18 @@ class ST7789():
 
         if self._display_width == 320:
             table = WIDTH_320
+        elif self._display_width == 280:
+            table = WIDTH_280
         elif self._display_width == 240:
             table = WIDTH_240
         elif self._display_width == 135:
             table = WIDTH_135
         else:
             raise ValueError(
-                "Unsupported display. 320x240, 240x240 and 135x240 are supported."
+                'Unsupported display. 320x240, 280x240, 240x240 and 135x240 are supported.'
             )
 
-        self.width, self.height, self.xstart, self.ystart = table[rotation]
+        self.width, self.height, self._xstart, self._ystart = table[rotation]
         self._write(ST7789_MADCTL, bytes([madctl]))
 
     def _set_columns(self, start, end):
@@ -334,7 +312,7 @@ class ST7789():
         """
         if start <= end <= self.width:
             self._write(ST7789_CASET, _encode_pos(
-                start+self.xstart, end + self.xstart))
+                start+self._xstart, end + self._xstart))
 
     def _set_rows(self, start, end):
         """
@@ -346,7 +324,7 @@ class ST7789():
        """
         if start <= end <= self.height:
             self._write(ST7789_RASET, _encode_pos(
-                start+self.ystart, end+self.ystart))
+                start+self._ystart, end+self._ystart))
 
     def _set_window(self, x0, y0, x1, y1):
         """
@@ -507,8 +485,8 @@ class ST7789():
             vsa (int): Vertical Scrolling Area
             bfa (int): Bottom Fixed Area
         """
-        struct.pack(">HHH", tfa, vsa, bfa)
-        self._write(ST7789_VSCRDEF, struct.pack(">HHH", tfa, vsa, bfa))
+        struct.pack('>HHH', tfa, vsa, bfa)
+        self._write(ST7789_VSCRDEF, struct.pack('>HHH', tfa, vsa, bfa))
 
     def vscsad(self, vssa):
         """
@@ -527,7 +505,7 @@ class ST7789():
             vssa (int): Vertical Scrolling Start Address
 
         """
-        self._write(ST7789_VSCSAD, struct.pack(">H", vssa))
+        self._write(ST7789_VSCSAD, struct.pack('>H', vssa))
 
     def _text8(self, font, text, x0, y0, color=WHITE, background=BLACK):
         """
